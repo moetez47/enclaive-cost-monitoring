@@ -1,0 +1,31 @@
+# Jetbrains project files
+.idea
+*.iml
+
+.parcel-cache
+.cache
+dist
+.env
+.env.local
+node_modules/
+
+# VS Code
+.vscode
+
+#Apple
+*.DS_Store
+
+# tilt
+tilt_config.json
+.next
+
+# React Router
+/.react-router/
+/build/
+
+# Lighthouse CI
+.lighthouseci/
+
+server/.env
+
+secrets/

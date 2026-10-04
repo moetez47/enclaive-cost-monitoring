@@ -1,0 +1,164 @@
+import { lazy, Suspense } from "react";
+import {
+  isRouteErrorResponse,
+  Links,
+  Meta,
+  Outlet,
+  Scripts,
+  ScrollRestoration,
+} from "react-router";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
+
+import type { Route } from "./+types/root";
+import "./app.scss";
+import "./tailwind.css";
+import { ThemeProvider, THEME_STORAGE_KEY } from "~/components/theme-context";
+import AppMuiThemeBridge from "~/components/app-mui-theme-bridge";
+import { SettingsProvider } from "~/components/settings-context";
+
+const isLegacyMode = import.meta.env.VITE_LEGACY_MODE === "true";
+
+const DashboardApp = lazy(() =>
+  Promise.all([
+    import("~/components/dashboard-context"),
+    import("~/components/report-context"),
+    import("~/components/tutorial-wizard-context"),
+    import("~/components/auth-guard"),
+    import("~/components/current-user-context"),
+  ]).then(([dashboard, report, tutorial, auth, currentUser]) => ({
+    default: () => (
+      <SettingsProvider>
+        <dashboard.DashboardProvider>
+          <report.ReportProvider>
+            <tutorial.TutorialWizardProvider>
+              <auth.default>
+                <currentUser.CurrentUserProvider>
+                  <Outlet />
+                </currentUser.CurrentUserProvider>
+              </auth.default>
+            </tutorial.TutorialWizardProvider>
+          </report.ReportProvider>
+        </dashboard.DashboardProvider>
+      </SettingsProvider>
+    ),
+  })),
+);
+// Applies the persisted / preferred theme before React hydrates so the first
+// paint matches the user's choice (avoids a light-to-dark flash). The
+// localStorage read is isolated in its own try/catch so that the matchMedia
+// fallback and DOM updates still run when storage is unavailable (disabled
+// cookies, some private modes, sandboxed iframes).
+const themeBootstrap = `(function () {
+  try {
+    var stored = null;
+    try {
+      stored = window.localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)});
+    } catch (e) {}
+    var theme =
+      stored === 'white' || stored === 'g100'
+        ? stored
+        : 'white';
+    var root = document.documentElement;
+    root.setAttribute('data-carbon-theme', theme);
+    root.classList.remove('cds--white', 'cds--g100');
+    root.classList.add(theme === 'g100' ? 'cds--g100' : 'cds--white');
+    root.style.colorScheme = theme === 'g100' ? 'dark' : 'light';
+  } catch (e) {}
+})();`;
+
+export function Layout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <head>
+        <link rel="icon" type="image/png" href="/logo.png" />
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <Meta />
+        <Links />
+        {!isLegacyMode && (
+          <script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
+        )}
+      </head>
+      <body>
+        {children}
+        <ScrollRestoration />
+        <Scripts />
+      </body>
+    </html>
+  );
+}
+
+import { useAppTheme } from "~/components/theme-context";
+
+function AppThemeBodyWrapper({ children }: { children: React.ReactNode }) {
+  const { theme } = useAppTheme();
+  return (
+    <div
+      data-carbon-theme={theme}
+      className={`cds--${theme === "g100" ? "g100" : "white"} min-h-screen`}
+      style={{
+        backgroundColor: "var(--cds-background)",
+        color: "var(--cds-text-primary)",
+        colorScheme: theme === "g100" ? "dark" : "light",
+        transition: "background-color 0.15s ease, color 0.15s ease",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+export default function App() {
+  if (isLegacyMode) {
+    return (
+      <LocalizationProvider dateAdapter={AdapterDateFns}>
+        <Outlet />
+      </LocalizationProvider>
+    );
+  }
+  return (
+    <ThemeProvider>
+      <AppMuiThemeBridge>
+        <LocalizationProvider dateAdapter={AdapterDateFns}>
+          <AppThemeBodyWrapper>
+            <Suspense fallback={null}>
+              <DashboardApp />
+            </Suspense>
+          </AppThemeBodyWrapper>
+        </LocalizationProvider>
+      </AppMuiThemeBridge>
+    </ThemeProvider>
+  );
+}
+
+export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
+  let message = "Oops!";
+  let details = "An unexpected error occurred.";
+  let stack: string | undefined;
+
+  if (isRouteErrorResponse(error)) {
+    message = error.status === 404 ? "404" : "Error";
+    details =
+      error.status === 404
+        ? "The requested page could not be found."
+        : error.statusText || details;
+  } else if (error && error instanceof Error) {
+    details = error.message;
+    stack = import.meta.env.DEV ? error.stack : undefined;
+  }
+
+  return (
+    <main className="p-[4rem_2rem] max-w-[600px] mx-auto">
+      <h1 className="text-[2rem] font-bold mb-4">{message}</h1>
+      <p className="text-[var(--cds-text-secondary)] mb-4">{details}</p>
+      {stack && (
+        <pre className="bg-[var(--cds-layer)] p-4 overflow-x-auto text-[0.8rem]">
+          <code>{stack}</code>
+        </pre>
+      )}
+    </main>
+  );
+}
+
+
